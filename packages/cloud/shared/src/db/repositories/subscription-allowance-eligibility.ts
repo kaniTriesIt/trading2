@@ -84,6 +84,12 @@ export async function readEligibleSubscriptionAllowance(
   if (!policy.subscriptionFunded) return undefined;
   const period = await findCurrentAllowance(tx, organizationId, now, lock);
   if (period) {
+    if (!period.subscription_id || period.subscription_revision === null)
+      fundingError(
+        "SUBSCRIPTION_FUNDING_AUTHORITY_UNAVAILABLE",
+        "Infrastructure allowance requires subscription authority",
+        { organizationId },
+      );
     const [source] = await tx
       .select()
       .from(billingSubscriptions)

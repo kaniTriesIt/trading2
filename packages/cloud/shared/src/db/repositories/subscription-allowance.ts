@@ -122,18 +122,19 @@ async function lockPeriod(
       context: { organizationId, periodId },
     });
   }
-  await tx
-    .select({ id: billingSubscriptions.id })
-    .from(billingSubscriptions)
-    .where(
-      and(
-        eq(billingSubscriptions.organization_id, organizationId),
-        fundingScopePredicate(billingSubscriptions, billingScope),
-        eq(billingSubscriptions.id, hint.subscriptionId),
-      ),
-    )
-    .limit(1)
-    .for("update");
+  if (hint.subscriptionId)
+    await tx
+      .select({ id: billingSubscriptions.id })
+      .from(billingSubscriptions)
+      .where(
+        and(
+          eq(billingSubscriptions.organization_id, organizationId),
+          fundingScopePredicate(billingSubscriptions, billingScope),
+          eq(billingSubscriptions.id, hint.subscriptionId),
+        ),
+      )
+      .limit(1)
+      .for("update");
   const [period] = await tx
     .select()
     .from(subscriptionAllowancePeriods)
@@ -287,6 +288,8 @@ export class SubscriptionAllowanceRepository {
       conflict("Renewal invoice and period identities disagree", { subscriptionId: source.id });
     const existing = matches[0];
     if (existing) {
+      if (existing.subscription_revision === null)
+        conflict("Renewal requires subscription revision authority", { periodId: existing.id });
       const [revision] = await tx
         .select()
         .from(billingSubscriptionRevisions)
@@ -411,7 +414,12 @@ export class SubscriptionAllowanceRepository {
     // expiry job runs. Retire a terminal predecessor's bucket here so a
     // resubscription in the same period is granted instead of conflicting.
     for (const candidate of await overlapping()) {
-      if (candidate.billingScopeId !== null || candidate.subscriptionId === source.id) continue;
+      if (
+        candidate.billingScopeId !== null ||
+        !candidate.subscriptionId ||
+        candidate.subscriptionId === source.id
+      )
+        continue;
       const [predecessor] = await tx
         .select({ status: billingSubscriptions.status })
         .from(billingSubscriptions)
@@ -547,6 +555,10 @@ export class SubscriptionAllowanceRepository {
     } else {
       if (billingScope)
         conflict("App-scoped allowance retirement belongs to its app lifecycle owner", {
+          periodId: period.id,
+        });
+      if (!period.subscription_id)
+        conflict("Terminal subscription retirement requires a subscription", {
           periodId: period.id,
         });
       const [source] = await tx
@@ -738,7 +750,11 @@ export class SubscriptionAllowanceRepository {
       return { ...replay, period, replayed: true, databaseNow };
     }
     const period = await lockPeriod(tx, input.organizationId, input.periodId, input.billingScope);
-    if (period.state !== "open" || isAllowanceExpired(databaseNow, period.expires_at)) {
+    if (
+      period.state !== "open" ||
+      period.period_start > databaseNow ||
+      isAllowanceExpired(databaseNow, period.expires_at)
+    ) {
       conflict("Allowance is expired at post-lock database time", { periodId: period.id });
     }
     const available = moneyToMicros(period.available_amount, "period.availableAmount");

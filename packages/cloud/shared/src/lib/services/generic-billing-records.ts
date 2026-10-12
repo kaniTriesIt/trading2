@@ -27,7 +27,7 @@ const cursorSchema = z
         .object({
           kind: z.literal("usage"),
           reservationId: z.string().uuid(),
-          source: z.enum(["trial_claim", "paid_invoice"]),
+          source: z.enum(["trial_claim", "paid_invoice", "pilot"]),
         })
         .strict(),
       z
@@ -187,7 +187,7 @@ export class GenericBillingRecordsService {
       if (row.occurredAt === null) appBillingConflict("Finalized app usage has no settlement time");
       return {
         operationId: row.operationId,
-        fundingSource: row.source === "trial_claim" ? "trial" : "paid_invoice",
+        fundingSource: row.source === "trial_claim" ? "trial" : row.source,
         amountUsd: row.amountUsd,
         occurredAt: row.occurredAt.toISOString(),
       };

@@ -252,6 +252,8 @@ export async function publishPaidRenewalInTransaction(
       settlementDetails: verified.settlementDetails,
       databaseNow: now,
     });
+    if (existing.subscription_revision === null)
+      renewalUnavailable("funded_invoice_revision_missing");
     return { replayed: true, subscriptionRevision: existing.subscription_revision };
   }
   // Command start and all publication owners hold the organization lock. A replay above
