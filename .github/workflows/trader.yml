@@ -1,0 +1,69 @@
+name: trader-watch
+
+# Read-only Solana watcher. Code lives on `trader`; output goes to `trader-data`.
+# NOTE: scheduled and manually-dispatched workflows only run from the default branch,
+# so this file must exist there. It always checks out the `trader` branch for the code.
+on:
+  schedule:
+    - cron: "7,37 * * * *" # every 30 minutes
+  workflow_dispatch:
+
+concurrency:
+  group: trader-watch
+  cancel-in-progress: false # queue, never overlap, never race on the data files
+
+permissions:
+  contents: write
+
+jobs:
+  watch:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Mask secrets
+        env:
+          BIRDEYE_API_KEY: ${{ secrets.BIRDEYE_API_KEY }}
+          SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL }}
+        run: |
+          [ -n "$BIRDEYE_API_KEY" ] && echo "::add-mask::$BIRDEYE_API_KEY"
+          [ -n "$SOLANA_RPC_URL" ] && echo "::add-mask::$SOLANA_RPC_URL"
+          exit 0
+
+      - name: Checkout trader code (sparse)
+        uses: actions/checkout@v4
+        with:
+          ref: trader
+          path: code
+          fetch-depth: 1
+          sparse-checkout: trader
+          sparse-checkout-cone-mode: true
+
+      - name: Checkout trader-data
+        uses: actions/checkout@v4
+        with:
+          ref: trader-data
+          path: data
+          fetch-depth: 1
+
+      - uses: oven-sh/setup-bun@v2
+        with:
+          bun-version: "1.4.2"
+
+      # The watcher has zero dependencies, so there is no install step and nothing to cache.
+      - name: Run watcher
+        working-directory: code/trader
+        env:
+          BIRDEYE_API_KEY: ${{ secrets.BIRDEYE_API_KEY }}
+          SOLANA_RPC_URL: ${{ secrets.SOLANA_RPC_URL }}
+          TRADER_DATA_DIR: ${{ github.workspace }}/data/trading
+        run: bun run src/run.ts
+
+      - name: Commit data
+        working-directory: data
+        run: |
+          git config user.name "trader-bot"
+          git config user.email "trader-bot@users.noreply.github.com"
+          git add -A trading
+          if git diff --cached --quiet; then echo "no data change"; exit 0; fi
+          git commit -q -m "watch: $(date -u +%Y-%m-%dT%H:%MZ)"
+          git push origin HEAD:trader-data

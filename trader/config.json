@@ -1,0 +1,20 @@
+{
+  "filters": {
+    "minLiquidityUsd": 25000,
+    "minPoolAgeHours": 24,
+    "requireMintAuthorityRevoked": true,
+    "requireFreezeAuthorityRevoked": true,
+    "maxTop10HolderPercent": 40,
+    "minVolumeToLiquidity": 0.2,
+    "maxVolumeToLiquidity": 30
+  },
+  "sources": {
+    "birdeyeTrendingLimit": 20,
+    "dexscreenerBoostedLimit": 30,
+    "maxSecurityChecks": 15,
+    "birdeyeDelayMs": 1100
+  },
+  "watchlist": {
+    "maxEntries": 10
+  }
+}

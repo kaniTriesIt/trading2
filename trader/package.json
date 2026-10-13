@@ -1,0 +1,11 @@
+{
+  "name": "trader",
+  "private": true,
+  "type": "module",
+  "version": "0.1.0",
+  "description": "Solana memecoin watcher and paper trader. Zero dependencies; standalone from the monorepo.",
+  "scripts": {
+    "watch": "bun run src/run.ts",
+    "test": "bun test"
+  }
+}
